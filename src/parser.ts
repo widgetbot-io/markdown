@@ -8,68 +8,72 @@ type ASTNode =
     }
   | string;
 
-type Context = {
-  bold: boolean;
-  italic: boolean;
-};
+type Context = ASTNodeType[];
 
-function parseNormalMd(
-  content: string,
-  token: string,
-  type: "bold" | "italic",
-  context: Partial<Context> = {}
-): ASTNode {
-  content = content.substring(0, content.indexOf(token));
-  const children = parser(content, { ...context, [type]: true });
-  const length = children.reduce((acc, next) => acc + next.length, 0) + token.length * 2;
-
-  return {
-    type,
-    length,
-    children,
-  };
-}
-
-function parser(content: string, context: Partial<Context> = {}): ASTNode[] {
+function parser(content: string, context: Context = []): ASTNode[] {
   const nodes: ASTNode[] = [];
 
-  let escaped = false;
+  let buffers = [];
 
   for (let charIndex = 0; charIndex < content.length; ++charIndex) {
-    switch (content[charIndex]) {
-      case '"':
-        escaped = true;
-        break;
-      case "*":
-        if (content[charIndex + 1] === "*") {
-          const boldNode = parseNormalMd(
-            content.substring(charIndex + 2),
-            "**",
-            "bold",
-            context
-          );
-          charIndex += boldNode.length - 1;
-          nodes.push(boldNode);
-        } else {
-          const italicNode = parseNormalMd(
-            content.substring(charIndex + 1),
-            "*",
-            "italic",
-            context
-          );
-          charIndex += italicNode.length - 1;
-          nodes.push(italicNode);
-        }
-        break;
-      default: {
-        const lastNode = nodes[nodes.length - 1];
+    const currentScope = context[context.length - 1];
 
-        if (typeof lastNode === "string") {
-          nodes[nodes.length - 1] += content[charIndex];
+    switch (content[charIndex]) {
+      case "*":
+        if (currentScope === "italic") {
+          const children = parser(
+            buffers.pop(),
+            context.slice(0, context.length - 2)
+          );
+          const length =
+            children.reduce((acc, next) => acc + next.length, 0) +
+            "*".length * 2;
+          nodes.push({
+            type: "italic",
+            length,
+            children,
+          });
+          // charIndex += length + "**".length;
+          context.pop();
+        } else if (content[charIndex + 1] === "*") {
+          if (currentScope === "bold") {
+            const children = parser(
+              buffers.pop(),
+              context.slice(0, context.length - 2)
+            );
+            const length =
+              children.reduce((acc, next) => acc + next.length, 0) +
+              "**".length * 2;
+            nodes.push({
+              type: "bold",
+              length,
+              children,
+            });
+            // charIndex += length;
+            context.pop();
+          } else {
+            context.push("bold");
+            buffers.push("");
+          }
+          charIndex += 1;
         } else {
-          nodes.push(content[charIndex]);
+          context.push("italic");
+          buffers.push("");
         }
-      }
+        continue;
+    }
+
+    if (currentScope !== undefined) {
+      buffers[buffers.length - 1] += content[charIndex];
+      continue;
+    }
+
+    const lastNode = nodes[nodes.length - 1];
+
+    if (typeof lastNode === "string") {
+      nodes[nodes.length - 1] += content[charIndex];
+    } else {
+      nodes.push(content[charIndex]);
     }
   }
 

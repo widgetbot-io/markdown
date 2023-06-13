@@ -30,7 +30,7 @@ test("Bold and italic text", () => {
     "Hi, I am a ",
     {
       type: "bold",
-      length: 6,
+      length: 21,
       children: [
         "bold and ",
         {
