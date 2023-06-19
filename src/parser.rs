@@ -2,11 +2,11 @@ use crate::tokenizer::Token;
 use serde::Serialize;
 
 #[derive(Serialize, Debug, Eq, PartialEq)]
-pub enum ASTNodeInternal {
+pub enum ASTNode {
     Text(String),
-    Bold(Vec<ASTNodeInternal>),
-    Italic(Vec<ASTNodeInternal>),
-    Strikethrough(Vec<ASTNodeInternal>),
+    Bold(Vec<ASTNode>),
+    Italic(Vec<ASTNode>),
+    Strikethrough(Vec<ASTNode>),
 }
 
 macro_rules! md_basic {
@@ -14,18 +14,22 @@ macro_rules! md_basic {
         let mut sub_tokens = $char_peekable.take_while(|token| **token != $token_type);
         let children = parser(&mut sub_tokens);
         $node_type(children)
-    }}
+    }};
 }
 
-pub fn parser(char_peekable: &mut dyn Iterator<Item = &Token>) -> Vec<ASTNodeInternal> {
+pub fn parser(char_peekable: &mut dyn Iterator<Item = &Token>) -> Vec<ASTNode> {
     let mut nodes = vec![];
 
     while let Some(token) = char_peekable.next() {
         let node = match token {
-            Token::Bold => md_basic!(char_peekable, Token::Bold, ASTNodeInternal::Bold),
-            Token::Italic => md_basic!(char_peekable, Token::Italic, ASTNodeInternal::Italic),
-            Token::Strikethrough => md_basic!(char_peekable, Token::Strikethrough, ASTNodeInternal::Strikethrough),
-            Token::Text(text) => ASTNodeInternal::Text(text.clone()),
+            Token::Bold => md_basic!(char_peekable, Token::Bold, ASTNode::Bold),
+            Token::Italic => md_basic!(char_peekable, Token::Italic, ASTNode::Italic),
+            Token::Strikethrough => md_basic!(
+                char_peekable,
+                Token::Strikethrough,
+                ASTNode::Strikethrough
+            ),
+            Token::Text(text) => ASTNode::Text(text.clone()),
             _ => todo!(),
         };
 
@@ -37,7 +41,7 @@ pub fn parser(char_peekable: &mut dyn Iterator<Item = &Token>) -> Vec<ASTNodeInt
 
 #[cfg(test)]
 mod tests {
-    use crate::parser::{ASTNodeInternal, parser};
+    use crate::parser::{parser, ASTNode};
     use crate::tokenizer::Token;
 
     #[test]
@@ -47,7 +51,7 @@ mod tests {
 
         let ast = parser(&mut tokens.iter().peekable());
 
-        assert_eq!(ast, vec![ASTNodeInternal::Text(text)]);
+        assert_eq!(ast, vec![ASTNode::Text(text)]);
     }
 
     #[test]
@@ -57,7 +61,10 @@ mod tests {
 
         let ast = parser(&mut tokens.iter().peekable());
 
-        assert_eq!(ast, vec![ASTNodeInternal::Italic(vec![ASTNodeInternal::Text(text)])]);
+        assert_eq!(
+            ast,
+            vec![ASTNode::Italic(vec![ASTNode::Text(text)])]
+        );
     }
 
     #[test]
@@ -67,16 +74,62 @@ mod tests {
 
         let ast = parser(&mut tokens.iter().peekable());
 
-        assert_eq!(ast, vec![ASTNodeInternal::Bold(vec![ASTNodeInternal::Text(text)])]);
+        assert_eq!(
+            ast,
+            vec![ASTNode::Bold(vec![ASTNode::Text(text)])]
+        );
+    }
+
+    #[test]
+    fn parse_mix() {
+        let tokens = vec![
+            Token::Text("Hi I am a ".to_string()),
+            Token::Bold,
+            Token::Text("bold ".to_string()),
+            Token::Strikethrough,
+            Token::Text("or".to_string()),
+            Token::Strikethrough,
+            Token::Text(" and ".to_string()),
+            Token::Italic,
+            Token::Text("italic".to_string()),
+            Token::Italic,
+            Token::Bold,
+            Token::Text(" piece of text".to_string()),
+        ];
+
+        let ast = parser(&mut tokens.iter().peekable());
+
+        assert_eq!(
+            ast,
+            vec![
+                ASTNode::Text("Hi I am a ".to_string()),
+                ASTNode::Bold(vec![
+                    ASTNode::Text("bold ".to_string()),
+                    ASTNode::Strikethrough(vec![ASTNode::Text("or".to_string())]),
+                    ASTNode::Text(" and ".to_string()),
+                    ASTNode::Italic(vec![ASTNode::Text("italic".to_string())])
+                ]),
+                ASTNode::Text(" piece of text".to_string())
+            ]
+        );
     }
 
     #[test]
     fn parse_strikethrough_text() {
         let text = "Hi I am a strikethrough piece of text".to_string();
-        let tokens = vec![Token::Strikethrough, Token::Text(text.clone()), Token::Strikethrough];
+        let tokens = vec![
+            Token::Strikethrough,
+            Token::Text(text.clone()),
+            Token::Strikethrough,
+        ];
 
         let ast = parser(&mut tokens.iter().peekable());
 
-        assert_eq!(ast, vec![ASTNodeInternal::Strikethrough(vec![ASTNodeInternal::Text(text)])]);
+        assert_eq!(
+            ast,
+            vec![ASTNode::Strikethrough(vec![ASTNode::Text(
+                text
+            )])]
+        );
     }
 }
