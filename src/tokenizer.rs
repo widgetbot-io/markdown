@@ -198,12 +198,7 @@ mod tests {
 
         let tokens = tokenize(&mut peekable);
 
-        assert_eq!(
-            tokens,
-            vec![
-                Token::Text(text.to_string()),
-            ]
-        );
+        assert_eq!(tokens, vec![Token::Text(text.to_string()),]);
     }
 
     #[test]

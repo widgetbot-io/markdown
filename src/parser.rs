@@ -1,13 +1,44 @@
 use crate::tokenizer::Token;
-use serde::Serialize;
+use serde::ser::SerializeStruct;
+use serde::{Serialize, Serializer};
 
-#[derive(Serialize, Debug, Eq, PartialEq)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum ASTNode {
     Text(String),
     Bold(Vec<ASTNode>),
     Italic(Vec<ASTNode>),
     Strikethrough(Vec<ASTNode>),
     Spoiler(Vec<ASTNode>),
+}
+
+impl ASTNode {
+    fn get_name(&self) -> &'static str {
+        match self {
+            Self::Text(_) => "text",
+            Self::Bold(_) => "bold",
+            Self::Italic(_) => "italic",
+            Self::Strikethrough(_) => "strikethrough",
+            Self::Spoiler(_) => "spoiler",
+        }
+    }
+}
+
+impl Serialize for ASTNode {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut output = serializer.serialize_struct(self.get_name(), 2)?;
+        output.serialize_field("type", self.get_name())?;
+        match self {
+            ASTNode::Text(text) => output.serialize_field("children", text),
+            ASTNode::Italic(children) => output.serialize_field("children", children),
+            ASTNode::Bold(children) => output.serialize_field("children", children),
+            ASTNode::Strikethrough(children) => output.serialize_field("children", children),
+            ASTNode::Spoiler(children) => output.serialize_field("children", children),
+        }?;
+        output.end()
+    }
 }
 
 macro_rules! md_basic {
@@ -25,16 +56,10 @@ pub fn parser(token_peekable: &mut dyn Iterator<Item = &Token>) -> Vec<ASTNode> 
         let node = match token {
             Token::Bold => md_basic!(token_peekable, Token::Bold, ASTNode::Bold),
             Token::Italic => md_basic!(token_peekable, Token::Italic, ASTNode::Italic),
-            Token::Strikethrough => md_basic!(
-                token_peekable,
-                Token::Strikethrough,
-                ASTNode::Strikethrough
-            ),
-            Token::Spoiler => md_basic!(
-                token_peekable,
-                Token::Spoiler,
-                ASTNode::Spoiler
-            ),
+            Token::Strikethrough => {
+                md_basic!(token_peekable, Token::Strikethrough, ASTNode::Strikethrough)
+            }
+            Token::Spoiler => md_basic!(token_peekable, Token::Spoiler, ASTNode::Spoiler),
             Token::Text(text) => ASTNode::Text(text.clone()),
             _ => todo!(),
         };
@@ -67,10 +92,7 @@ mod tests {
 
         let ast = parser(&mut tokens.iter().peekable());
 
-        assert_eq!(
-            ast,
-            vec![ASTNode::Italic(vec![ASTNode::Text(text)])]
-        );
+        assert_eq!(ast, vec![ASTNode::Italic(vec![ASTNode::Text(text)])]);
     }
 
     #[test]
@@ -80,10 +102,7 @@ mod tests {
 
         let ast = parser(&mut tokens.iter().peekable());
 
-        assert_eq!(
-            ast,
-            vec![ASTNode::Bold(vec![ASTNode::Text(text)])]
-        );
+        assert_eq!(ast, vec![ASTNode::Bold(vec![ASTNode::Text(text)])]);
     }
 
     #[test]
@@ -131,11 +150,6 @@ mod tests {
 
         let ast = parser(&mut tokens.iter().peekable());
 
-        assert_eq!(
-            ast,
-            vec![ASTNode::Strikethrough(vec![ASTNode::Text(
-                text
-            )])]
-        );
+        assert_eq!(ast, vec![ASTNode::Strikethrough(vec![ASTNode::Text(text)])]);
     }
 }
