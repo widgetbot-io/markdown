@@ -7,27 +7,33 @@ pub enum ASTNode {
     Bold(Vec<ASTNode>),
     Italic(Vec<ASTNode>),
     Strikethrough(Vec<ASTNode>),
+    Spoiler(Vec<ASTNode>),
 }
 
 macro_rules! md_basic {
-    ($char_peekable: expr, $token_type: path, $node_type: path) => {{
-        let mut sub_tokens = $char_peekable.take_while(|token| **token != $token_type);
+    ($token_peekable: expr, $token_type: path, $node_type: path) => {{
+        let mut sub_tokens = $token_peekable.take_while(|token| **token != $token_type);
         let children = parser(&mut sub_tokens);
         $node_type(children)
     }};
 }
 
-pub fn parser(char_peekable: &mut dyn Iterator<Item = &Token>) -> Vec<ASTNode> {
+pub fn parser(token_peekable: &mut dyn Iterator<Item = &Token>) -> Vec<ASTNode> {
     let mut nodes = vec![];
 
-    while let Some(token) = char_peekable.next() {
+    while let Some(token) = token_peekable.next() {
         let node = match token {
-            Token::Bold => md_basic!(char_peekable, Token::Bold, ASTNode::Bold),
-            Token::Italic => md_basic!(char_peekable, Token::Italic, ASTNode::Italic),
+            Token::Bold => md_basic!(token_peekable, Token::Bold, ASTNode::Bold),
+            Token::Italic => md_basic!(token_peekable, Token::Italic, ASTNode::Italic),
             Token::Strikethrough => md_basic!(
-                char_peekable,
+                token_peekable,
                 Token::Strikethrough,
                 ASTNode::Strikethrough
+            ),
+            Token::Spoiler => md_basic!(
+                token_peekable,
+                Token::Spoiler,
+                ASTNode::Spoiler
             ),
             Token::Text(text) => ASTNode::Text(text.clone()),
             _ => todo!(),

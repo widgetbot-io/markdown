@@ -3,6 +3,8 @@ mod tokenizer;
 mod parser;
 
 use wasm_bindgen::prelude::*;
+use crate::parser::parser;
+use crate::tokenizer::tokenize;
 
 // When the `wee_alloc` feature is enabled, use `wee_alloc` as the global
 // allocator.
@@ -16,8 +18,9 @@ extern "C" {
 }
 
 #[wasm_bindgen]
-pub fn parse_markdown(input: String) {
-    let char_peekable = input.chars().peekable();
+pub fn parse_markdown(input: String) -> Result<JsValue, JsValue> {
+    let tokens = tokenize(&mut input.chars().peekable());
+    let ast = parser(&mut tokens.iter().peekable());
 
-    // serde_wasm_bindgen::to_value::<Vec<String>>(&vec![]).unwrap()
+    Ok(serde_wasm_bindgen::to_value(&ast)?)
 }
